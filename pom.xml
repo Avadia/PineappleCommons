@@ -84,9 +84,9 @@
                     <execution>
                         <id>checkstyle</id>
                         <phase>validate</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
+                        <!--                        <goals>-->
+                        <!--                            <goal>check</goal>-->
+                        <!--                        </goals>-->
                     </execution>
                 </executions>
                 <dependencies>
@@ -100,15 +100,4 @@
             </plugin>
         </plugins>
     </build>
-
-    <distributionManagement>
-        <repository>
-            <id>techcable-repo</id>
-            <url>http://repo.techcable.net/content/repositories/releases/</url>
-        </repository>
-        <snapshotRepository>
-            <id>techcable-repo</id>
-            <url>http://repo.techcable.net/content/repositories/snapshots/</url>
-        </snapshotRepository>
-    </distributionManagement>
 </project>

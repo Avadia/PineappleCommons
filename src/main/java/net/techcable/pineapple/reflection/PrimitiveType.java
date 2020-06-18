@@ -1,33 +1,33 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple.reflection;
 
-import java.util.Locale;
-import javax.annotation.Nullable;
-
 import com.google.common.primitives.Primitives;
 
-import static com.google.common.base.Preconditions.*;
+import javax.annotation.Nullable;
+import java.util.Locale;
+
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * An enumeration of all the primitive types in the java language.
@@ -45,42 +45,11 @@ public enum PrimitiveType {
 
     private final Class<?> primitiveClass;
     private final Class<?> wrapperClass;
+
     /* private */ PrimitiveType(Class<?> primitiveClass, Class<?> wrapperClass) {
         this.primitiveClass = checkNotNull(primitiveClass);
         this.wrapperClass = checkNotNull(wrapperClass);
     }
-
-    /**
-     * Return this primitive's class.
-     *
-     * @return this primitive's class
-     */
-    public Class<?> getPrimitiveClass() {
-        return primitiveClass;
-    }
-
-    /**
-     * Return this primitive's wrapper class,
-     * that it is boxed into when it needs to be represented as an object.
-     *
-     * @return this primitive's wrapper class
-     */
-    public Class<?> getWrapperClass() {
-        return wrapperClass;
-    }
-
-    /**
-     * Return if the primitive type is numeric.
-     *
-     * @return if this primitive is a numeric type
-     */
-    public boolean isNumeric() {
-        return Number.class.isAssignableFrom(wrapperClass);
-    }
-
-    //
-    // Lookup methods
-    //
 
     /**
      * Return the primitive type of the specified class, or null if it isn't primitive.
@@ -149,6 +118,7 @@ public enum PrimitiveType {
      * @param boxedClass the wrapper class to get the primitive type of
      * @return the primitive type of the specified boxed class, or null if none.
      */
+    @SuppressWarnings("unused")
     @Nullable
     public static PrimitiveType fromBoxedClass(Class<?> boxedClass) {
         String name = boxedClass.getName();
@@ -207,6 +177,40 @@ public enum PrimitiveType {
         }
         assert !Primitives.wrap(boxedClass).isPrimitive();
         return null;
+    }
+
+    /**
+     * Return this primitive's class.
+     *
+     * @return this primitive's class
+     */
+    public Class<?> getPrimitiveClass() {
+        return primitiveClass;
+    }
+
+    //
+    // Lookup methods
+    //
+
+    /**
+     * Return this primitive's wrapper class,
+     * that it is boxed into when it needs to be represented as an object.
+     *
+     * @return this primitive's wrapper class
+     */
+    @SuppressWarnings("unused")
+    public Class<?> getWrapperClass() {
+        return wrapperClass;
+    }
+
+    /**
+     * Return if the primitive type is numeric.
+     *
+     * @return if this primitive is a numeric type
+     */
+    @SuppressWarnings("unused")
+    public boolean isNumeric() {
+        return Number.class.isAssignableFrom(wrapperClass);
     }
 
     @Override

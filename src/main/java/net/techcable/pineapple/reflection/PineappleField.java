@@ -1,38 +1,38 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple.reflection;
-
-import java.lang.reflect.Field;
-import java.lang.reflect.Modifier;
-import java.util.Objects;
-import javax.annotation.Nullable;
-import javax.annotation.concurrent.ThreadSafe;
 
 import com.google.common.base.Verify;
 import com.google.common.collect.ImmutableList;
 
+import javax.annotation.Nullable;
+import javax.annotation.concurrent.ThreadSafe;
+import java.lang.reflect.Field;
+import java.lang.reflect.Modifier;
+import java.util.Objects;
+
 import static com.google.common.base.Preconditions.*;
-import static net.techcable.pineapple.SimpleFormatter.*;
+import static net.techcable.pineapple.SimpleFormatter.format;
 
 /**
  * A reference to a class's field, which can be used to access its value.
@@ -66,15 +66,16 @@ public abstract class PineappleField<T, V> {
     @Nullable
     /* package */ final PrimitiveType primitiveType;
 
-    @SuppressWarnings("unchecked") // Callers shouldn't be accessing this method.
-    /* package */ PineappleField(Field field) {
+    @SuppressWarnings({"unchecked", "UnstableApiUsage"})
+        // Callers shouldn't be accessing this method.
+        /* package */ PineappleField(Field field) {
         this.field = checkNotNull(field, "Null field");
         checkArgument(
-            field.isAccessible()
-            || Modifier.isPublic(field.getModifiers())
-            && Modifier.isPublic(field.getDeclaringClass().getModifiers()),
-            "Field isn't accessible: %s",
-            field
+                field.isAccessible()
+                        || Modifier.isPublic(field.getModifiers())
+                        && Modifier.isPublic(field.getDeclaringClass().getModifiers()),
+                "Field isn't accessible: %s",
+                field
         );
         this.declaringClass = (Class<T>) field.getDeclaringClass();
         this.fieldType = (Class<V>) field.getType();
@@ -86,6 +87,166 @@ public abstract class PineappleField<T, V> {
     //
     // Getters
     //
+
+    /**
+     * Get the pineapple field corresponding to the specified field object.
+     *
+     * @param field the field to get the pineapple field for
+     * @return a pineapple field corresponding to the specified field object
+     * @throws NullPointerException if the field is null
+     * @throws SecurityException    if the caller doesn't have access to the specified field.
+     */
+    public static PineappleField<?, ?> fromField(Field field) {
+        Objects.requireNonNull(field, "Null field");
+        field = Reflection.cloneField(field); // Defensive copy
+        if (!Modifier.isPublic(field.getModifiers())) {
+            /*
+             * The field isn't public, so they're basically trying to suppress access checks.
+             * Ensure that they're permitted to do that, by checking for the permission.
+             * We don't care whether or not field.isAccessible(), since we wan't to check for permission again,
+             * and we want to implicitly access private fields, without an explicit call to setAccessible.
+             */
+            SecurityManager securityManager = System.getSecurityManager();
+            if (securityManager != null) {
+                securityManager.checkPermission(Reflection.SUPPRESS_ACCESS_CHECKS_PERMISSION);
+            }
+        }
+        field.setAccessible(true);
+        final boolean isStatic = Modifier.isStatic(field.getModifiers());
+        final Class<?> fieldType = field.getType();
+        if (Reflection.UNSAFE != null) {
+            PrimitiveType primitiveType = PrimitiveType.fromClass(fieldType);
+            if (primitiveType != null) {
+                // Fallback to reflection
+                if (primitiveType == PrimitiveType.INT) {
+                    if (isStatic) {
+                        return new UnsafeStaticIntegerField(field);
+                    } else {
+                        return new UnsafeInstanceIntegerField<>(field);
+                    }
+                }
+            } else {
+                // The primitive type is null, so it must be a reference field.
+                return isStatic ? new UnsafeStaticReferenceField<>(field)
+                        : new UnsafeInstanceReferenceField<>(field);
+            }
+        }
+        return new ReflectivePineappleField<>(field);
+    }
+
+    /**
+     * Get the pineapple field named {@code name} in the specified class.
+     *
+     * @param declaringType the type that declared the field
+     * @param name          the name of the field
+     * @param <T>           the type of the declaring class
+     * @return the field with the specified name and class
+     * @throws NullPointerException     if type or name is null
+     * @throws IllegalArgumentException if a field with the given name doesn't exist
+     * @throws SecurityException        if the caller doesn't have access to the specified field.
+     */
+    @SuppressWarnings({"unchecked", "unused"})
+    public static <T> PineappleField<T, ?> create(Class<? extends T> declaringType, String name) {
+        try {
+            return (PineappleField<T, ?>) fromField(declaringType.getDeclaredField(name));
+        } catch (NoSuchFieldException e) {
+            throw new IllegalArgumentException("No field named " + name + " in " + declaringType);
+        }
+
+    }
+
+    /**
+     * Get the pineapple field named {@code name} with the type {@code fieldType} in the specified class.
+     *
+     * @param declaringType the type to get the field from
+     * @param name          the name of the field
+     * @param fieldType     the type of the field's value
+     * @param <T>           the type of the declaring class
+     * @param <V>           the type of the field
+     * @return the field with the specified name and class
+     * @throws NullPointerException     if type or name is null
+     * @throws IllegalArgumentException if a field with the given name and type doesn't exist
+     * @throws SecurityException        if the caller doesn't have access to the specified field.
+     */
+    @SuppressWarnings("unchecked")
+    public static <T, V> PineappleField<T, V> create(Class<? extends T> declaringType, String name, Class<V> fieldType) {
+        Field field;
+        try {
+            field = checkNotNull(declaringType, "Null declaring type").getDeclaredField(checkNotNull(name, "Null fieldName"));
+        } catch (NoSuchFieldException e) {
+            throw new IllegalArgumentException(format("Can't find field named '{}' in {}", name, declaringType.getTypeName()));
+        }
+        checkArgument(checkNotNull(fieldType, "Null field type").isAssignableFrom(field.getType()), "Field type %s doesn't equal expected field type %s", fieldType);
+        return (PineappleField<T, V>) fromField(field);
+    }
+
+    //
+    // Utility methods
+    //
+
+    /**
+     * Get the only field in the class with the given type
+     * <p>Throws an exception if no fields are found, or if multiple fields are found.</p>
+     *
+     * @param clazz     the type to find the field in
+     * @param fieldType the type of the field
+     * @param <T>       the type of the declaring class
+     * @param <V>       the type of the field
+     * @return the only field
+     * @throws IllegalArgumentException if there is more than one field with the given type
+     * @throws IllegalArgumentException if not found
+     * @throws NullPointerException     if any args are null
+     */
+    @SuppressWarnings("unused")
+    public static <T, V> PineappleField<T, V> findFieldWithType(Class<T> clazz, Class<V> fieldType) {
+        ImmutableList<PineappleField<T, V>> fields = findFieldsWithType(clazz, fieldType);
+        switch (fields.size()) {
+            case 1:
+                return fields.get(0);
+            case 0:
+                throw new IllegalArgumentException("Field in " + clazz + " not found with type " + fieldType);
+            default:
+                StringBuilder builder = new StringBuilder("Multiple fields found in ");
+                builder.append(clazz);
+                builder.append(" with type ");
+                builder.append(fieldType);
+                builder.append(": [");
+                for (int i = 0; i < fields.size(); i++) {
+                    PineappleField<T, V> field = fields.get(i);
+                    builder.append(field);
+                    if (i + 1 < fields.size()) { // Has more
+                        builder.append(", ");
+                    }
+                }
+                builder.append("] ");
+                throw new IllegalArgumentException(builder.toString());
+        }
+    }
+
+    /**
+     * Get the only field in the class with the given type
+     *
+     * @param clazz     the type to find the field in
+     * @param fieldType the type of the field
+     * @param <T>       the type of the declaring class
+     * @param <V>       the type of the field
+     * @return all fields in the class with the given type
+     * @throws IllegalArgumentException if there is more than one field with the given type
+     * @throws IllegalArgumentException if not found
+     * @throws NullPointerException     if any args are null
+     */
+    @SuppressWarnings("unchecked")
+    public static <T, V> ImmutableList<PineappleField<T, V>> findFieldsWithType(Class<T> clazz, Class<V> fieldType) {
+        checkNotNull(clazz, "Null class");
+        checkNotNull(fieldType, "Null type");
+        ImmutableList.Builder<PineappleField<T, V>> builder = ImmutableList.builder();
+        for (Field field : clazz.getDeclaredFields()) {
+            if (Reflection.isLenientlyAssignableFrom(fieldType, field.getType())) {
+                builder.add((PineappleField<T, V>) fromField(field));
+            }
+        }
+        return builder.build();
+    }
 
     /**
      * Get the {@link Field} object corresponding to this field.
@@ -115,7 +276,7 @@ public abstract class PineappleField<T, V> {
     }
 
     //
-    // Utility methods
+    // Reflective access and setters
     //
 
     /**
@@ -171,10 +332,6 @@ public abstract class PineappleField<T, V> {
         return Modifier.isFinal(modifiers);
     }
 
-    //
-    // Reflective access and setters
-    //
-
     /**
      * Return the value of this _non-primitive instance field_ in the specified instance.
      * <p>
@@ -186,8 +343,8 @@ public abstract class PineappleField<T, V> {
      *
      * @param instance the instance to get the field's value from
      * @return the current value of the field in the given instance
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if the field is static or is a primtive field
      */
     public abstract V get(T instance);
@@ -217,8 +374,8 @@ public abstract class PineappleField<T, V> {
      *
      * @param instance the instance to get the field's value from
      * @return the current value of this integer field in the given instance
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if the field is static or isn't a primitive integer
      */
     public abstract int getInt(T instance);
@@ -249,8 +406,8 @@ public abstract class PineappleField<T, V> {
      *
      * @param instance the instance to get the field's value from
      * @return the current value of the field in the given instance
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field is static.
      */
     public abstract V getBoxed(T instance);
@@ -320,9 +477,9 @@ public abstract class PineappleField<T, V> {
      * </p>
      *
      * @param instance the instance of the class to set the field's value in
-     * @param value the new value of the field
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @param value    the new value of the field
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field isn't static, or if the field is final.
      */
     public final void putBoxed(T instance, @Nullable V value) {
@@ -347,9 +504,9 @@ public abstract class PineappleField<T, V> {
      * </p>
      *
      * @param instance the instance of the class to set the field's value in
-     * @param value the new value of the field
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @param value    the new value of the field
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field isn't static, or if the field is final.
      */
     public abstract void forcePutBoxed(T instance, @Nullable V value);
@@ -364,9 +521,9 @@ public abstract class PineappleField<T, V> {
      * </p>
      *
      * @param instance the instance of the class to set the field's value in
-     * @param value the new value of the field
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @param value    the new value of the field
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field isn't static, or if the field is final.
      */
     public final void put(T instance, @Nullable V value) {
@@ -390,9 +547,9 @@ public abstract class PineappleField<T, V> {
      * </p>
      *
      * @param instance the instance of the class to set the field's value in
-     * @param value the new value of the field
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @param value    the new value of the field
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field isn't static.
      */
     public abstract void forcePut(T instance, @Nullable V value);
@@ -434,6 +591,10 @@ public abstract class PineappleField<T, V> {
      */
     public abstract void forcePutStatic(V value);
 
+    //
+    // Static constructors and factories
+    //
+
     /**
      * Set the new value of this _int primitive_ instance field.
      * <p>
@@ -444,9 +605,9 @@ public abstract class PineappleField<T, V> {
      * </p>
      *
      * @param instance the instance of the class to set the field's value in
-     * @param value the new value of the field
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @param value    the new value of the field
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field isn't static, or if the field is final.
      */
     public final void putInt(T instance, int value) {
@@ -470,9 +631,9 @@ public abstract class PineappleField<T, V> {
      * </p>
      *
      * @param instance the instance of the class to set the field's value in
-     * @param value the new value of the field
-     * @throws ClassCastException if the given object isn't an instance of the declaring class
-     * @throws NullPointerException if the instance is null
+     * @param value    the new value of the field
+     * @throws ClassCastException    if the given object isn't an instance of the declaring class
+     * @throws NullPointerException  if the instance is null
      * @throws IllegalStateException if this field isn't static.
      */
     public abstract void forcePutInt(T instance, int value);
@@ -517,166 +678,5 @@ public abstract class PineappleField<T, V> {
     @Override
     public String toString() {
         return this.field.getDeclaringClass().getTypeName() + "." + this.field.getName();
-    }
-
-    //
-    // Static constructors and factories
-    //
-
-    /**
-     * Get the pineapple field corresponding to the specified field object.
-     *
-     * @param field the field to get the pineapple field for
-     * @return a pineapple field corresponding to the specified field object
-     * @throws NullPointerException if the field is null
-     * @throws SecurityException if the caller doesn't have access to the specified field.
-     */
-    public static PineappleField<?, ?> fromField(Field field) {
-        Objects.requireNonNull(field, "Null field");
-        field = Reflection.cloneField(field); // Defensive copy
-        if (!Modifier.isPublic(field.getModifiers())) {
-            /*
-             * The field isn't public, so they're basically trying to suppress access checks.
-             * Ensure that they're permitted to do that, by checking for the permission.
-             * We don't care whether or not field.isAccessible(), since we wan't to check for permission again,
-             * and we want to implicitly access private fields, without an explicit call to setAccessible.
-             */
-            SecurityManager securityManager = System.getSecurityManager();
-            if (securityManager != null) {
-                securityManager.checkPermission(Reflection.SUPPRESS_ACCESS_CHECKS_PERMISSION);
-            }
-        }
-        field.setAccessible(true);
-        final boolean isStatic = Modifier.isStatic(field.getModifiers());
-        final Class<?> fieldType = field.getType();
-        if (Reflection.UNSAFE != null) {
-            PrimitiveType primitiveType = PrimitiveType.fromClass(fieldType);
-            if (primitiveType != null) {
-                switch (primitiveType) {
-                    case INT:
-                        if (isStatic) {
-                            return new UnsafeStaticIntegerField(field);
-                        } else {
-                            return new UnsafeInstanceIntegerField<>(field);
-                        }
-                    default:
-                        break; // Fallback to reflection
-                }
-            } else {
-                // The primitive type is null, so it must be a reference field.
-                return isStatic ? new UnsafeStaticReferenceField<>(field)
-                    : new UnsafeInstanceReferenceField<>(field);
-            }
-        }
-        return new ReflectivePineappleField<>(field);
-    }
-
-    /**
-     * Get the pineapple field named {@code name} in the specified class.
-     *
-     * @param declaringType the type that declared the field
-     * @param name  the name of the field
-     * @param <T> the type of the declaring class
-     * @return the field with the specified name and class
-     * @throws NullPointerException     if type or name is null
-     * @throws IllegalArgumentException if a field with the given name doesn't exist
-     * @throws SecurityException if the caller doesn't have access to the specified field.
-     */
-    @SuppressWarnings("unchecked")
-    public static <T> PineappleField<T, ?> create(Class<? extends T> declaringType, String name) {
-        try {
-            return (PineappleField<T, ?>) fromField(declaringType.getDeclaredField(name));
-        } catch (NoSuchFieldException e) {
-            throw new IllegalArgumentException("No field named " + name + " in " + declaringType);
-        }
-
-    }
-
-    /**
-     * Get the pineapple field named {@code name} with the type {@code fieldType} in the specified class.
-     *
-     * @param declaringType the type to get the field from
-     * @param name  the name of the field
-     * @param fieldType the type of the field's value
-     * @param <T> the type of the declaring class
-     * @param <V> the type of the field
-     * @return the field with the specified name and class
-     * @throws NullPointerException     if type or name is null
-     * @throws IllegalArgumentException if a field with the given name and type doesn't exist
-     * @throws SecurityException if the caller doesn't have access to the specified field.
-     */
-    @SuppressWarnings("unchecked")
-    public static <T, V> PineappleField<T, V> create(Class<? extends T> declaringType, String name, Class<V> fieldType) {
-        Field field;
-        try {
-            field = checkNotNull(declaringType, "Null declaring type").getDeclaredField(checkNotNull(name, "Null fieldName"));
-        } catch (NoSuchFieldException e) {
-            throw new IllegalArgumentException(format("Can't find field named '{}' in {}", name, declaringType.getTypeName()));
-        }
-        checkArgument(checkNotNull(fieldType, "Null field type").isAssignableFrom(field.getType()), "Field type %s doesn't equal expected field type %s", fieldType);
-        return (PineappleField<T, V>) fromField(field);
-    }
-
-
-    /**
-     * Get the only field in the class with the given type
-     * <p>Throws an exception if no fields are found, or if multiple fields are found.</p>
-     *
-     * @param clazz the type to find the field in
-     * @param fieldType the type of the field
-     * @param <T> the type of the declaring class
-     * @param <V> the type of the field
-     * @return the only field
-     * @throws IllegalArgumentException if there is more than one field with the given type
-     * @throws IllegalArgumentException if not found
-     * @throws NullPointerException if any args are null
-     */
-    public static <T, V> PineappleField<T, V> findFieldWithType(Class<T> clazz, Class<V> fieldType) {
-        ImmutableList<PineappleField<T, V>> fields = findFieldsWithType(clazz, fieldType);
-        switch (fields.size()) {
-            case 1:
-                return fields.get(0);
-            case 0:
-                throw new IllegalArgumentException("Field in " + clazz + " not found with type " + fieldType);
-            default:
-                StringBuilder builder = new StringBuilder("Multiple fields found in ");
-                builder.append(clazz);
-                builder.append(" with type ");
-                builder.append(fieldType);
-                builder.append(": [");
-                for (int i = 0; i < fields.size(); i++) {
-                    PineappleField<T, V> field = fields.get(i);
-                    builder.append(field);
-                    if (i + 1 < fields.size()) { // Has more
-                        builder.append(", ");
-                    }
-                }
-                builder.append("] ");
-                throw new IllegalArgumentException(builder.toString());
-        }
-    }
-
-    /**
-     * Get the only field in the class with the given type
-     * @param clazz the type to find the field in
-     * @param fieldType the type of the field
-     * @param <T> the type of the declaring class
-     * @param <V> the type of the field
-     * @throws IllegalArgumentException if there is more than one field with the given type
-     * @throws IllegalArgumentException if not found
-     * @throws NullPointerException if any args are null
-     * @return all fields in the class with the given type
-     */
-    @SuppressWarnings("unchecked")
-    public static <T, V> ImmutableList<PineappleField<T, V>> findFieldsWithType(Class<T> clazz, Class<V> fieldType) {
-        checkNotNull(clazz, "Null class");
-        checkNotNull(fieldType, "Null type");
-        ImmutableList.Builder<PineappleField<T, V>> builder = ImmutableList.builder();
-        for (Field field : clazz.getDeclaredFields()) {
-            if (Reflection.isLenientlyAssignableFrom(fieldType, field.getType())) {
-                builder.add((PineappleField<T, V>) fromField(field));
-            }
-        }
-        return builder.build();
     }
 }

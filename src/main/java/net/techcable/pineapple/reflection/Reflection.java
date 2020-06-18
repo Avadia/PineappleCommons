@@ -1,27 +1,34 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple.reflection;
 
+import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
+import com.google.common.primitives.Primitives;
+import net.techcable.pineapple.SneakyThrow;
+
+import javax.annotation.Nullable;
+import javax.annotation.ParametersAreNonnullByDefault;
 import java.lang.invoke.MethodHandle;
 import java.lang.invoke.MethodHandleInfo;
 import java.lang.invoke.MethodHandles;
@@ -32,21 +39,66 @@ import java.lang.reflect.ReflectPermission;
 import java.security.Permission;
 import java.util.Arrays;
 import java.util.stream.Collectors;
-import javax.annotation.Nullable;
-import javax.annotation.ParametersAreNonnullByDefault;
 
-import com.google.common.base.Preconditions;
-import com.google.common.collect.ImmutableList;
-import com.google.common.primitives.Primitives;
-
-import net.techcable.pineapple.SneakyThrow;
-
-import static com.google.common.base.Preconditions.*;
-import static net.techcable.pineapple.SimpleFormatter.*;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static net.techcable.pineapple.SimpleFormatter.format;
 
 @SuppressWarnings("restriction") // Let us use sun.misc.Unsafe
 @ParametersAreNonnullByDefault
 public final class Reflection {
+    /**
+     * The permission to suppress access checks in reflection.
+     * <p>
+     * This permission is required to access private methods and fields.
+     * It is also used to guard access to {@link #acquireUnsafe},
+     * since that can also be used to bypass security/access checks.
+     * </p>
+     */
+    /* package */ static final Permission SUPPRESS_ACCESS_CHECKS_PERMISSION = new ReflectPermission("suppressAccessChecks");
+    @Nullable
+    /* package */ static final sun.misc.Unsafe UNSAFE;
+    @Nullable
+    private static final MethodHandle FIELD_COPY_METHOD = tryGetMethod(Field.class, "copy");
+    /**
+     * A field object's `root` field, indicating it's parent field object.
+     * <p>
+     * In java 8, you can only copy the parent field object in a tree.
+     * Therefore, in order to copy the field object, we have to find the parent object and clone that.
+     * We can't use a PineappleField here, since their API needs this class and can't use it until we're initialized.
+     * Since they can't use us,
+     * Therefore, we have to resort to the regular field reflection API, and use them instead.
+     * </p>
+     */
+    @Nullable
+    private static final Field FIELD_ROOT_FIELD;
+
+    static {
+        Field rootField;
+        try {
+            rootField = Field.class.getDeclaredField("root");
+            rootField.setAccessible(true);
+            if (Field.class != rootField.getType()) {
+                rootField = null;
+            }
+        } catch (NoSuchFieldException e) {
+            rootField = null;
+        }
+        FIELD_ROOT_FIELD = rootField;
+    }
+
+    static {
+        sun.misc.Unsafe unsafe;
+        try {
+            Class<sun.misc.Unsafe> unsafeClass = sun.misc.Unsafe.class;
+            Field field = unsafeClass.getDeclaredField("theUnsafe");
+            field.setAccessible(true);
+            unsafe = (sun.misc.Unsafe) field.get(null);
+        } catch (NoClassDefFoundError | NoSuchFieldException | SecurityException | IllegalAccessException e) {
+            unsafe = null; // Can't find it :(
+        }
+        UNSAFE = unsafe;
+    }
+
     private Reflection() {
     }
 
@@ -56,6 +108,7 @@ public final class Reflection {
         return first.isAssignableFrom(second);
     }
 
+    @SuppressWarnings("unused")
     public static MethodHandle getMethod(Class<?> declaringType, String name, Class<?>... parameterTypes) {
         MethodHandle result = tryGetMethod(declaringType, name, parameterTypes);
         if (result != null) {
@@ -88,6 +141,7 @@ public final class Reflection {
         }
     }
 
+    @SuppressWarnings("unused")
     public static MethodHandle getConstructor(Class<?> declaringType, Class<?>... parameterTypes) {
         MethodHandle result = tryGetConstructor(declaringType, parameterTypes);
         if (result != null) {
@@ -117,6 +171,7 @@ public final class Reflection {
         }
     }
 
+    @SuppressWarnings("unused")
     @Nullable
     public static <T> Class<? extends T> getClass(String name, Class<T> superclass) {
         Class<?> raw = getClass(name);
@@ -135,15 +190,16 @@ public final class Reflection {
     /**
      * Get the field with the given name and type from the given class
      *
-     * @param clazz          the class to get the field from
-     * @param name           the name of the field
-     * @param expectedReturnType     the return type of the method
-     * @param parameterTypes the parameter types of the method
+     * @param clazz              the class to get the field from
+     * @param name               the name of the field
+     * @param expectedReturnType the return type of the method
+     * @param parameterTypes     the parameter types of the method
      * @return the name
      * @throws NullPointerException     if clazz, name or type is null
      * @throws IllegalArgumentException if a field with the given name doesn't exist
      * @throws IllegalArgumentException if the field doesn't have the expected type
      */
+    @SuppressWarnings("unused")
     public static MethodHandle getMethodWithReturnType(Class<?> clazz, String name, Class<?> expectedReturnType, Class<?>... parameterTypes) {
         Preconditions.checkNotNull(clazz, "Null class");
         Preconditions.checkNotNull(name, "Null name");
@@ -178,6 +234,7 @@ public final class Reflection {
      * @throws IllegalArgumentException if not found
      * @throws NullPointerException     if any args are null
      */
+    @SuppressWarnings({"unused", "rawtypes"})
     public static MethodHandle findMethodWithType(Class<?> clazz, Class returnType, Class<?>... parameters) {
         ImmutableList<MethodHandle> methods = findMethodsWithType(clazz, returnType, parameters);
         StringBuilder builder;
@@ -255,35 +312,6 @@ public final class Reflection {
         return builder.build();
     }
 
-    @Nullable
-    private static final MethodHandle FIELD_COPY_METHOD = tryGetMethod(Field.class, "copy");
-    /**
-     * A field object's `root` field, indicating it's parent field object.
-     * <p>
-     * In java 8, you can only copy the parent field object in a tree.
-     * Therefore, in order to copy the field object, we have to find the parent object and clone that.
-     * We can't use a PineappleField here, since their API needs this class and can't use it until we're initialized.
-     * Since they can't use us,
-     * Therefore, we have to resort to the regular field reflection API, and use them instead.
-     * </p>
-     */
-    @Nullable
-    private static final Field FIELD_ROOT_FIELD;
-
-    static {
-        Field rootField;
-        try {
-            rootField = Field.class.getDeclaredField("root");
-            rootField.setAccessible(true);
-            if (Field.class != rootField.getType()) {
-                rootField = null;
-            }
-        } catch (NoSuchFieldException e) {
-            rootField = null;
-        }
-        FIELD_ROOT_FIELD = rootField;
-    }
-
     /**
      * Create an identical clone of the specified field object, with an independent access flag.
      * <p>
@@ -342,31 +370,6 @@ public final class Reflection {
     }
 
     /**
-     * The permission to suppress access checks in reflection.
-     * <p>
-     * This permission is required to access private methods and fields.
-     * It is also used to guard access to {@link #acquireUnsafe},
-     * since that can also be used to bypass security/access checks.
-     * </p>
-     */
-    /* package */ static final Permission SUPPRESS_ACCESS_CHECKS_PERMISSION = new ReflectPermission("suppressAccessChecks");
-    @Nullable
-    /* package */ static final sun.misc.Unsafe UNSAFE;
-
-    static {
-        sun.misc.Unsafe unsafe;
-        try {
-            Class<sun.misc.Unsafe> unsafeClass = sun.misc.Unsafe.class;
-            Field field = unsafeClass.getDeclaredField("theUnsafe");
-            field.setAccessible(true);
-            unsafe = (sun.misc.Unsafe) field.get(null);
-        } catch (NoClassDefFoundError | NoSuchFieldException | SecurityException | IllegalAccessException e) {
-            unsafe = null; // Can't find it :(
-        }
-        UNSAFE = unsafe;
-    }
-
-    /**
      * Acquire the instance of {@link sun.misc.Unsafe}, or null if it can't be found.
      * <p>
      * The returned Unsafe object should be carefully protected,
@@ -377,9 +380,10 @@ public final class Reflection {
      * so it should only be used in initialization code.
      * </p>
      *
-     * @throws SecurityException if access to sun.misc.Unsafe is forbidden
      * @return the instance of sun.misc.Unsafe
+     * @throws SecurityException if access to sun.misc.Unsafe is forbidden
      */
+    @SuppressWarnings("unused")
     @Nullable
     public static sun.misc.Unsafe acquireUnsafe() {
         SecurityManager securityManager = System.getSecurityManager();

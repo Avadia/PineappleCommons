@@ -1,51 +1,50 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple.collect;
-
-import java.util.AbstractMap;
-import java.util.Collections;
-import java.util.HashMap;
-import java.util.Map;
-import java.util.concurrent.ConcurrentMap;
-import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
-import java.util.function.BiConsumer;
-import java.util.function.BiFunction;
-import java.util.function.Function;
-import javax.annotation.Nonnull;
-import javax.annotation.Nullable;
-import javax.annotation.ParametersAreNonnullByDefault;
 
 import com.google.common.collect.ImmutableCollection;
 import com.google.common.collect.ImmutableMap;
 import com.google.common.collect.ImmutableSet;
 
-import static com.google.common.base.Preconditions.*;
+import javax.annotation.Nonnull;
+import javax.annotation.Nullable;
+import javax.annotation.ParametersAreNonnullByDefault;
+import java.util.*;
+import java.util.concurrent.ConcurrentMap;
+import java.util.concurrent.atomic.AtomicReferenceFieldUpdater;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Function;
 
+import static com.google.common.base.Preconditions.checkNotNull;
+
+@SuppressWarnings("unused")
 @ParametersAreNonnullByDefault
 public class CopyOnWriteMap<K, V> extends AbstractMap<K, V> implements ConcurrentMap<K, V> {
-    @SuppressWarnings("AtomicFieldUpdaterIssues") // Generic.......
+    // Generic.......
+    @SuppressWarnings("rawtypes")
     private static final AtomicReferenceFieldUpdater<CopyOnWriteMap, ImmutableMap> MAP_UPDATER = AtomicReferenceFieldUpdater.newUpdater(CopyOnWriteMap.class, ImmutableMap.class, "bakedMap");
-    private final Map<K, V> map = Collections.synchronizedMap(new HashMap<K, V>());
+    private final Map<K, V> map = Collections.synchronizedMap(new HashMap<>());
     @Nullable
     private volatile ImmutableMap<K, V> bakedMap = null;
 
@@ -61,7 +60,7 @@ public class CopyOnWriteMap<K, V> extends AbstractMap<K, V> implements Concurren
 
     private ImmutableMap<K, V> bakeMap() {
         synchronized (map) {
-            return this.bakedMap = ImmutableMap.copyOf(map);
+            return Objects.requireNonNull(this.bakedMap = ImmutableMap.copyOf(map));
         }
     }
 
@@ -179,7 +178,7 @@ public class CopyOnWriteMap<K, V> extends AbstractMap<K, V> implements Concurren
     private V putIfAbsent0(K key, V value) {
         synchronized (map) {
             bakedMap = null;
-            return map.putIfAbsent(key, value);
+            return Objects.requireNonNull(map.putIfAbsent(key, value));
         }
     }
 
@@ -235,7 +234,8 @@ public class CopyOnWriteMap<K, V> extends AbstractMap<K, V> implements Concurren
             V value = map.get(key);
             if (value == null) {
                 value = mappingFunction.apply(key);
-                if (value == null) throw new IllegalArgumentException("Mapping function " + mappingFunction.getClass().getTypeName() + " returned null value for key " + key);
+                if (value == null)
+                    throw new IllegalArgumentException("Mapping function " + mappingFunction.getClass().getTypeName() + " returned null value for key " + key);
             }
             return value;
         }

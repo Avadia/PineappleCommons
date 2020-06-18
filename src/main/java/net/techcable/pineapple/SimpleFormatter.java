@@ -1,37 +1,38 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple;
 
+import javax.annotation.MatchesPattern;
+import javax.annotation.meta.TypeQualifierNickname;
 import java.lang.annotation.ElementType;
 import java.lang.annotation.Retention;
 import java.lang.annotation.RetentionPolicy;
 import java.lang.annotation.Target;
 import java.util.Arrays;
 import java.util.function.Supplier;
-import javax.annotation.MatchesPattern;
-import javax.annotation.meta.TypeQualifierNickname;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkArgument;
+import static com.google.common.base.Preconditions.checkNotNull;
 
 /**
  * Formats messages using a subset of {@link java.text.MessageFormat}.
@@ -49,8 +50,10 @@ import static com.google.common.base.Preconditions.*;
  * @author Techcable
  */
 public final class SimpleFormatter {
-    private SimpleFormatter() {}
     private static final String[] EMPTY_STRING_ARRAY = new String[0];
+
+    private SimpleFormatter() {
+    }
 
     /**
      * Insert no arguments into the given format string
@@ -78,6 +81,7 @@ public final class SimpleFormatter {
      * @throws IllegalArgumentException  if the format string isn't valid
      * @throws IndexOutOfBoundsException if one of the indexes isn't valid
      */
+    @SuppressWarnings("rawtypes")
     public static String format(@FormatPattern String format, Object... args) {
         checkNotNull(format, "Null format string");
         checkNotNull(args, "Null argument array");
@@ -127,8 +131,8 @@ public final class SimpleFormatter {
      * <p>Calling {@link #format(String, String...)} will produce the same result, but may result in more allocations/copying.</p>
      *
      * @param approximateSize the approximate size of the resulting string
-     * @param format the format string
-     * @param args   the arguments to insert
+     * @param format          the format string
+     * @param args            the arguments to insert
      * @return the formatted string
      * @throws NullPointerException      if the format string is null
      * @throws NullPointerException      if the argument array is null
@@ -204,6 +208,7 @@ public final class SimpleFormatter {
     @MatchesPattern("(?:[^{\\}%\\\\]|\\\\.|\\{\\d*\\})*")
     @Retention(RetentionPolicy.RUNTIME)
     @Target({ElementType.PARAMETER, ElementType.LOCAL_VARIABLE})
-    public @interface FormatPattern {}
+    public @interface FormatPattern {
+    }
 
 }

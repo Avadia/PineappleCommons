@@ -1,39 +1,41 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple.reflection;
 
+import com.google.common.base.Verify;
+
+import javax.annotation.Nullable;
 import java.lang.reflect.Field;
 import java.lang.reflect.Modifier;
 import java.util.Objects;
-import javax.annotation.Nullable;
 
-import com.google.common.base.Verify;
-
-import static net.techcable.pineapple.reflection.Reflection.*;
+import static net.techcable.pineapple.reflection.Reflection.UNSAFE;
 
 @SuppressWarnings("restriction")
 /* package */ final class UnsafeInstanceIntegerField<T> extends UnsafePineappleField<T, Integer> {
-    /* package */ UnsafeInstanceIntegerField(Field field) {
+    /* package */
+    @SuppressWarnings("UnstableApiUsage")
+    UnsafeInstanceIntegerField(Field field) {
         super(field);
         Verify.verify(field.getType() == int.class);
         Verify.verify(!Modifier.isStatic(field.getModifiers()));
@@ -60,7 +62,7 @@ import static net.techcable.pineapple.reflection.Reflection.*;
          * it's actually a very fast intrinsic in the JIT.
          */
         this.declaringClass.cast(instance);
-        return UNSAFE.getInt(instance, this.fieldOffset);
+        return Objects.requireNonNull(UNSAFE).getInt(instance, this.fieldOffset);
     }
 
     @Override
@@ -89,9 +91,10 @@ import static net.techcable.pineapple.reflection.Reflection.*;
          * it's actually a very fast intrinsic in the JIT.
          */
         this.declaringClass.cast(instance);
-        UNSAFE.putInt(instance, this.fieldOffset, value);
+        Objects.requireNonNull(UNSAFE).putInt(instance, this.fieldOffset, value);
     }
 
+    @SuppressWarnings("ConstantConditions")
     @Override
     public void forcePutBoxed(T instance, @Nullable Integer value) {
         this.forcePutInt(instance, value);

@@ -1,31 +1,32 @@
-/**
- * The MIT License
- * Copyright (c) 2016 Techcable
- *
- * Permission is hereby granted, free of charge, to any person obtaining a copy
- * of this software and associated documentation files (the "Software"), to deal
- * in the Software without restriction, including without limitation the rights
- * to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
- * copies of the Software, and to permit persons to whom the Software is
- * furnished to do so, subject to the following conditions:
- *
- * The above copyright notice and this permission notice shall be included in
- * all copies or substantial portions of the Software.
- *
- * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
- * IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
- * FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
- * AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
- * LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
- * OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
- * THE SOFTWARE.
+/*
+  The MIT License
+  Copyright (c) 2016 Techcable
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in
+  all copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
+  THE SOFTWARE.
  */
 package net.techcable.pineapple.reflection;
 
-import java.lang.reflect.Field;
 import javax.annotation.Nullable;
+import java.lang.reflect.Field;
 
-import static com.google.common.base.Preconditions.*;
+import static com.google.common.base.Preconditions.checkNotNull;
+import static com.google.common.base.Preconditions.checkState;
 
 /**
  * A PineappleField that accesses it's underlying field with reflection.
@@ -56,8 +57,8 @@ import static com.google.common.base.Preconditions.*;
             throw e; // Something else went wrong
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(
-                "Unexpected error accessing field: " + this,
-                e
+                    "Unexpected error accessing field: " + this,
+                    e
             );
         }
     }
@@ -83,8 +84,8 @@ import static com.google.common.base.Preconditions.*;
             throw e; // Unexpected NPE
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(
-                "Unexpected error accessing field: " + this,
-                e
+                    "Unexpected error accessing field: " + this,
+                    e
             );
         }
     }
@@ -92,8 +93,8 @@ import static com.google.common.base.Preconditions.*;
     @Override
     public int getInt(T instance) {
         checkState(
-            this.primitiveType == PrimitiveType.INT,
-            "Field isn't a primitive int!"
+                this.primitiveType == PrimitiveType.INT,
+                "Field isn't a primitive int!"
         );
         checkState(!this.isStatic(), "Field is static!");
         /*
@@ -112,8 +113,8 @@ import static com.google.common.base.Preconditions.*;
             throw e; // Something else went wrong
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(
-                "Unexpected error accessing field: " + this,
-                e
+                    "Unexpected error accessing field: " + this,
+                    e
             );
         }
     }
@@ -121,8 +122,8 @@ import static com.google.common.base.Preconditions.*;
     @Override
     public int getStaticInt() {
         checkState(
-            this.getPrimitiveType() == PrimitiveType.INT,
-            "Field isn't a primitive int!"
+                this.getPrimitiveType() == PrimitiveType.INT,
+                "Field isn't a primitive int!"
         );
         /*
          * Get the field's value optimistically, then catch any errors.
@@ -142,8 +143,8 @@ import static com.google.common.base.Preconditions.*;
             throw e; // Unexpected NPE
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(
-                "Unexpected error accessing field: " + this,
-                e
+                    "Unexpected error accessing field: " + this,
+                    e
             );
         }
     }
@@ -162,7 +163,7 @@ import static com.google.common.base.Preconditions.*;
          */
         try {
             return (V) super.field.get(instance);
-        }  catch (NullPointerException e) {
+        } catch (NullPointerException e) {
             checkNotNull(instance, "Null instance"); // Check for null instance
             throw e; // Unexpected NPE
         } catch (IllegalArgumentException e) {
@@ -170,8 +171,8 @@ import static com.google.common.base.Preconditions.*;
             throw e; // Something else went wrong
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(
-                "Unexpected error accessing field: " + this,
-                e
+                    "Unexpected error accessing field: " + this,
+                    e
             );
         }
     }
@@ -198,8 +199,8 @@ import static com.google.common.base.Preconditions.*;
             throw e; // Unexpected NPE
         } catch (IllegalAccessException e) {
             throw new IllegalStateException(
-                "Unexpected error accessing field: " + this,
-                e
+                    "Unexpected error accessing field: " + this,
+                    e
             );
         }
     }
